@@ -11,7 +11,7 @@
 // stand in for /bot and /output:
 //   mkdir -p out && MAKEFUN_BOT_DIR=. MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
@@ -22,5 +22,23 @@ try {
   copyFileSync(join(BOT_DIR, 'VIDEO.json'), join(OUTPUT_DIR, 'VIDEO.json'));
 } catch (err) {
   console.error(`VIDEO.json could not be copied from ${BOT_DIR}: ${(err as Error).message}`);
+  process.exit(1);
+}
+
+// Validate the copied file: it must parse as JSON and its "url" must be a
+// non-empty https URL. A stale or mistyped VIDEO.json would otherwise pass
+// silently and score 0 views at the deadline.
+const outPath = join(OUTPUT_DIR, 'VIDEO.json');
+let parsed;
+try {
+  parsed = JSON.parse(readFileSync(outPath, 'utf8'));
+} catch (err) {
+  console.error(`VIDEO.json in ${OUTPUT_DIR} is not valid JSON: ${(err as Error).message}`);
+  process.exit(1);
+}
+if (typeof parsed?.url !== 'string' || !parsed.url.startsWith('https://')) {
+  console.error(
+    `VIDEO.json in ${OUTPUT_DIR} has no usable "url": expected a non-empty https URL, got ${JSON.stringify(parsed?.url)}`,
+  );
   process.exit(1);
 }
